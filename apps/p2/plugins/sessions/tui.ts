@@ -168,6 +168,19 @@ export class SessionsSurface implements TuiSurface {
 
 	constructor(runtime: TuiRuntime) {
 		this.runtime = runtime;
+		runtime.attachSession = (session) =>
+			runtime.host.root(async (ctx) => {
+				const catalog = await ctx.get(Sessions, {});
+				if (catalog.variant !== "owner") throw new Error("--session requires owner sign-in");
+				const watch = await catalog.sessions.watch(ctx);
+				const rows = watch.value;
+				watch.stop();
+				const row = rows.find((each) => each.id === session);
+				if (!row) throw new Error(`Session ${session} does not exist`);
+				if (row.archivedAt !== null) throw new Error(`Session ${session} is archived`);
+				runtime.mains.set(session, row.main);
+				runtime.navigate("chat", session, row.main);
+			}, BACKGROUND_CONTEXT);
 		this.scope = new TuiScope(runtime);
 		this.probes = new PlaceProbes(runtime.ctx, () => this.rebuild());
 		[this.shownRows, this.editing] = this.scope.optimistic(() => this.received, applyRow);
@@ -984,6 +997,7 @@ export class SessionsSurface implements TuiSurface {
 	}
 
 	dispose(): void {
+		this.runtime.attachSession = undefined;
 		this.stopListening();
 		clearTimeout(this.searchTimer);
 		this.stopRegistry();

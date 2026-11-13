@@ -69,6 +69,8 @@ export async function startTuiClient(options: {
 	mouse?: MousePolicy;
 	/** Who the launcher was admitted as: the TUI starts with that role, so owner views hold before `Access` answers. */
 	role?: "owner" | "guest";
+	/** Existing session to open on first activation; subsequent bundle swaps restore navigation instead. */
+	session?: string;
 	url: URL;
 	/** The visitor's validated local preferences (section 4.2) and their change feed; sent to every worker as data. */
 	preferences?: {
@@ -400,6 +402,7 @@ export async function startTuiClient(options: {
 					// The visitor's mouse policy decides whether pi-tui captures the mouse (wheel, app-owned selection).
 					mouse: (options.mouse ?? "off") !== "off",
 					...(options.role ? { role: options.role } : {}),
+					...(options.session ? { session: options.session } : {}),
 				},
 				onFailure: (message) => {
 					if (sandbox === candidate) fail(message);
@@ -427,8 +430,13 @@ export async function startTuiClient(options: {
 							statusMessage(message as Record<string, unknown>);
 						else if (message.kind === "link" && "data" in message && message.data instanceof Uint8Array)
 							send(message.data);
-						// The worker's link closed on its own (e.g. Chord's heartbeat found the socket silent): drop the socket,
-						// so its close reconnects. No new authority: malformed frames already make the server end the link.
+						else if (
+							message.kind === "targetFailure" &&
+							"message" in message &&
+							typeof message.message === "string"
+						)
+							fail(`Cannot attach: ${visibleText(message.message).slice(0, 300)}`);
+						// The worker's heartbeat found a silent link: drop the socket so its close reconnects.
 						else if (message.kind === "linkClosed") socket?.terminate();
 						else if (message.kind === "exit") {
 							void close();

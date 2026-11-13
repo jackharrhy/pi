@@ -296,6 +296,7 @@ export async function resumeAfterEnded(
 
 export function parseTuiArgs(args: readonly string[], env: NodeJS.ProcessEnv = process.env) {
 	let urlText: string | undefined;
+	let session: string | undefined;
 	let ownerLink = env.P2_TUI_OWNER_LINK;
 	let joinLink: string | undefined;
 	let theme: string | undefined;
@@ -303,7 +304,10 @@ export function parseTuiArgs(args: readonly string[], env: NodeJS.ProcessEnv = p
 	let radius: { server?: string } | undefined;
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i]!;
-		if (arg === "--radius") {
+		if (arg === "--session") {
+			session = args[++i];
+			if (!session || !SESSION.test(session)) throw new Error("--session needs a valid session ID");
+		} else if (arg === "--radius") {
 			// Optionally followed by the server's ID; without it, the user's only online server.
 			const next = args[i + 1];
 			radius = next !== undefined && SERVER_ID.test(next) ? { server: args[++i] } : {};
@@ -332,7 +336,8 @@ export function parseTuiArgs(args: readonly string[], env: NodeJS.ProcessEnv = p
 			: ownerOrigin(urlText ?? `http://127.0.0.1:${env.PORT ?? 8788}`);
 	if (ownerLink) ownerLinkToken(ownerLink, url);
 	if (joinLink) joinLinkToken(joinLink, url);
-	return { url, ownerLink, joinLink, theme, noThemes, radius };
+	if (session && joinLink) throw new Error("--session requires owner sign-in, not --join");
+	return { url, ownerLink, joinLink, theme, noThemes, radius, session };
 }
 
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

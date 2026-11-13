@@ -189,6 +189,8 @@ export class TuiRuntime implements Component, Focusable {
 	private panelFocused = false;
 	onExit: () => void = () => {};
 	onReload: () => void = () => {};
+	/** The sessions facet resolves an existing startup target, refusing unavailable sessions before navigation. */
+	attachSession: ((session: string) => Promise<void>) | undefined;
 	/** The launcher bridge for C actions (set by the worker runtime); denied without one (tests, bare hosts). */
 	onGrant: (action: string, payload: unknown) => Promise<TuiGrantResult> = async () => ({
 		ok: false,

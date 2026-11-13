@@ -14,11 +14,24 @@ import { Sessions } from "../../plugins/sessions/contract.ts";
 import { Sharing } from "../../plugins/sharing/contract.ts";
 import { startServer } from "../../src/hosts/server.ts";
 import { startTuiClient } from "../../src/hosts/tui-client.ts";
-import { claimOwner } from "../../src/hosts/tui-config.ts";
+import { claimOwner, parseTuiArgs } from "../../src/hosts/tui-config.ts";
 import { TERMINAL_COLOR_QUERY } from "../../src/hosts/tui-terminal-colors.ts";
 import { cookieTransport, type TuiTransport } from "../../src/hosts/tui-transport.ts";
 import { DARK_THEME } from "../../src/tui/theme/builtin-themes.ts";
 import { holdIn, http, poll, startFixture, until } from "./helpers.ts";
+
+test("explicit session target validates session IDs and excludes guest links", () => {
+	const id = "01234567-0123-0123-0123-0123456789ab";
+	assert.equal(parseTuiArgs(["--session", id], {}).session, id);
+	assert.equal(parseTuiArgs([], {}).session, undefined);
+	assert.equal(parseTuiArgs(["--session", "imported_session-123"], {}).session, "imported_session-123");
+	assert.throws(() => parseTuiArgs(["--session"], {}), /session ID/);
+	assert.throws(() => parseTuiArgs(["--session", "../private"], {}), /session ID/);
+	assert.throws(
+		() => parseTuiArgs(["--session", id, "--join", `http://127.0.0.1:8788/join/${"a".repeat(43)}`], {}),
+		/owner sign-in/,
+	);
+});
 
 const supported = Number(process.versions.node.split(".")[0]) >= 26;
 type Snapshot = { session?: string; drafts: [string, string][]; screen: string };

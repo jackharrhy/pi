@@ -78,6 +78,7 @@ try {
 							: `${reason ? `${reason}.\n` : ""}Owner link (npm run owner-link on the host) or share link: `,
 					),
 				);
+		if (options.session && admission.role !== "owner") throw new Error("--session requires owner sign-in");
 		if (!radius) saveConfig(config);
 		const url = radius ? radius.url : options.url;
 		const credentials = { cookie: admission.cookie };
@@ -95,6 +96,7 @@ try {
 				...(radius ? { pollMs: RADIUS_POLL_MS } : {}),
 				mouse: local.mouse,
 				role: admission.role,
+				session: options.session,
 				actions: launcherActions({
 					url,
 					credentials,

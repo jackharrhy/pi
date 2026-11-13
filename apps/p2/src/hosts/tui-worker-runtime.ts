@@ -22,7 +22,7 @@ import { restoreRuntime, snapshotRuntime } from "../tui/snapshot.ts";
 import { parseTerminalState } from "../tui/theme/theme.ts";
 
 type Bridge = {
-	input: { columns: number; rows: number; origin?: unknown; mouse?: unknown; role?: unknown };
+	input: { columns: number; rows: number; origin?: unknown; mouse?: unknown; role?: unknown; session?: string };
 	send(value: unknown): void;
 	onMessage(handler: (message: Record<string, unknown>) => unknown): void;
 };
@@ -262,6 +262,18 @@ export async function setupTui(bridge: Bridge, facets: readonly PluginFacet<P2Pr
 		if (message.kind === "snapshot") return snapshotRuntime(runtime);
 		if (message.kind === "activate") {
 			restoreRuntime(runtime, message.state);
+			// Only bootstrap a fresh client: a replacement bundle must keep the person's current navigation.
+			if (message.state === undefined && bridge.input.session) {
+				const session = bridge.input.session;
+				const attach = runtime.attachSession;
+				void (attach ? attach(session) : Promise.reject(new Error("Sessions TUI is unavailable"))).catch(
+					(error: unknown) =>
+						bridge.send({
+							kind: "targetFailure",
+							message: error instanceof Error ? error.message : String(error),
+						}),
+				);
+			}
 			link.activate();
 			tui.start();
 			if (runtime.origin) terminal.setTitle(`π p2 · ${new URL(runtime.origin).host}`);
