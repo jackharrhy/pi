@@ -8,6 +8,7 @@ import type { ConversationView } from "@earendil-works/pi-durable";
 import { BACKGROUND_CONTEXT } from "@p2/app/v1";
 import { Chat } from "../../plugins/chat/contract.ts";
 import { SessionLock, Sessions } from "../../plugins/sessions/contract.ts";
+import { Subagents } from "../../plugins/subagents/contract.ts";
 import type { RefIn } from "../../src/runtime/chord.ts";
 import { type Fixture, holdIn, startFixture, until } from "./helpers.ts";
 
@@ -63,6 +64,10 @@ describe("prompt resources (fake provider)", () => {
 		assert.match(prompt["agents-md"] ?? "", /Global rule: be brief\.[\s\S]*Project rule: use tabs\./);
 		assert.match(prompt.skills ?? "", /<name>deploy<\/name><description>Deploys the app\.<\/description>/);
 		assert.match(prompt.preamble ?? "", /coding assistant/);
+		assert.match(prompt.coordination ?? "", /clear assignment, one owner and an expected deliverable/);
+		assert.match(prompt.coordination ?? "", /persistent subagent's completed turn auto-reports/);
+		assert.match(prompt.coordination ?? "", /peer sessions must explicitly send one requested substantive result/);
+		assert.match(prompt.coordination ?? "", /Steering input does not cancel an active tool call/);
 	});
 
 	it("applies edits without restarting the worker", async () => {
@@ -71,6 +76,30 @@ describe("prompt resources (fake provider)", () => {
 		await new Promise((resolve) => setTimeout(resolve, 500));
 		await chat.send({ text: "again", requestId: "2" }, BACKGROUND_CONTEXT);
 		await until(chat.view, (value) => /use spaces/.test(sections(value)["agents-md"] ?? ""));
+	});
+
+	it("captures shared coordination guidance after reload and in tool-restricted subagents", async () => {
+		await fixture.server.reload(["conversations"]);
+		await chat.send({ text: "subagent", requestId: "coordination-child" }, BACKGROUND_CONTEXT);
+		const children = await holdIn(fixture.browser(), Subagents, {}, "reader");
+		const list = await until(children.children, (value) => Boolean(value?.[session]?.length));
+		const child = await holdIn(
+			fixture.browser(),
+			Chat,
+			{ session, conversation: list![session]![0]!.conversationId },
+			"participant",
+		);
+		const view = await until(child.view, (value) => Boolean(sections(value).coordination));
+		const guidance = sections(view).coordination!;
+		assert.match(guidance, /Keep ordinary progress silent/);
+		assert.match(guidance, /explicitly withdraw or replace the old question in prose/);
+		assert.match(guidance, /current task and latest result/);
+		assert.match(guidance, /Do not separately resend an automatically reported result/);
+		assert.equal(sections(view)["conversation-messaging"], undefined, "peer tools remain top-level only");
+		const parent = await until(chat.view, (value) => Boolean(sections(value).coordination));
+		assert.equal(sections(parent).coordination, guidance);
+		child.release();
+		children.release();
 	});
 
 	it("leaves the owner's global instructions and skills out of a locked session that did not pick them", async () => {
