@@ -21,7 +21,7 @@ import {
 import { memo, type ReactNode, useEffect, useId, useState } from "react";
 import { GlyphIcon } from "../../glyphs/GlyphIcon.tsx";
 import { IconMarker, WorkingMark } from "./marks.tsx";
-import type { Glyphs, GroupSection, NewTarget, Section, SidebarRow } from "./model.ts";
+import { FOLDERS, type Glyphs, type GroupSection, type NewTarget, type Section, type SidebarRow } from "./model.ts";
 import { NavRow } from "./NavRow.tsx";
 import { HiddenAttention, pageRoute, type RowActions, SessionItem, Toggle, useOpenedFrom } from "./Row.tsx";
 import "./style.css";
@@ -268,7 +268,9 @@ export const SidebarView = memo(function SidebarView({
 	const linkHref = useLinkHref();
 	// The open session is selected in one place only: where it was opened from, else the first place it shows.
 	const openedFrom = useOpenedFrom();
-	const places = activeId === undefined ? [] : placesOf(sections, activeId);
+	// Keep folder lists available through search, without duplicating Recents in the navigation.
+	const visibleSections = sections.filter((section) => section.key !== FOLDERS);
+	const places = activeId === undefined ? [] : placesOf(visibleSections, activeId);
 	const from = activeId === undefined ? undefined : openedFrom[activeId];
 	const activeScope = from !== undefined && places.includes(from) ? from : (places[0] ?? "");
 	const actions: RowActions = {
@@ -351,7 +353,7 @@ export const SidebarView = memo(function SidebarView({
 					/>
 				</SideNavigation.Item>
 			</SideNavigation.List>
-			{sections.map((section) => (
+			{visibleSections.map((section) => (
 				<RollupGroup key={section.key} section={section} rows={actions} actions={headings} />
 			))}
 		</SideNavigation.Root>,
