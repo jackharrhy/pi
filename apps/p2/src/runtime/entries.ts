@@ -2,16 +2,17 @@
 // and a subagent's message. Their entry kinds and data are read across plugins (attribution, search) and by both UIs
 // (transcript rows).
 
-import { compile, num, obj, type Static, str, union } from "@earendil-works/pi-schema";
+import { compile, num, obj, opt, type Static, str, union } from "@earendil-works/pi-schema";
 import { literal } from "./schema.ts";
 
 /**
- * A peer session's message (the conversations tool), as its own entry kind: the sending session and what it wrote.
- * Readers use this data; the model reads the server-written `<sender kind="session" …/>` block in front of the text.
+ * A peer's message: the conversations tool records a real local session; optional `from.kind: "external"` records
+ * an authenticated external peer without a local navigation target. Readers use this data; the model reads the
+ * server-written `<sender kind="session" …/>` or `<sender kind="external" …/>` block in front of the text.
  */
 export const PEER_MESSAGE_ENTRY = "p2.peer-message";
 export const PeerMessageSchema = obj(
-	{ from: obj({ id: str(), title: str() }, { open: true }), text: str() },
+	{ from: obj({ id: str(), title: str(), kind: opt(literal("external")) }, { open: true }), text: str() },
 	{ open: true },
 );
 export type PeerMessage = Static<typeof PeerMessageSchema>;

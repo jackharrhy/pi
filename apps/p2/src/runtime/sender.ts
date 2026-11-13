@@ -10,6 +10,7 @@ export type Sender =
 	| { readonly kind: "owner"; readonly name: string }
 	| { readonly kind: "guest"; readonly id: string; readonly name: string }
 	| { readonly kind: "session"; readonly id: string; readonly title: string }
+	| { readonly kind: "external"; readonly id: string; readonly name: string }
 	| { readonly kind: "subagent"; readonly name: string };
 
 /** How a sender block starts; the fake provider strips it from the text it echoes. */

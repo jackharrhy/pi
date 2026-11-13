@@ -103,7 +103,9 @@ export class UserMessageComponent extends Themed {
 		if (name && (item.author?.kind === "guest" || item.peer || item.chat)) {
 			const label = theme.fg("accent", theme.bold(lineText(name)));
 			const note = item.author?.kind === "guest" ? theme.fg("muted", " (guest, unverified name)") : "";
-			head.push(`${label}${note}${item.peer ? theme.fg("muted", " · from another session") : ""}`);
+			head.push(
+				`${label}${note}${item.peer ? theme.fg("muted", item.peer.kind === "external" ? " · external peer" : " · from another session") : ""}`,
+			);
 		}
 		if (item.replyTo)
 			head.push(theme.fg("muted", `↪ ${lineText(item.replyTo.name)}: ${lineText(item.replyTo.excerpt)}`));

@@ -162,6 +162,38 @@ describe("incoming messages", { skip: !browserTests }, () => {
 		assert.deepEqual(await browser.evaluate("window.opened"), ["conversation:2", "session:session-b"]);
 	});
 
+	it("labels external peers without local-session navigation", async () => {
+		await browser.open(`http://127.0.0.1:${fixture.server.port}`);
+		await browser.wait("document.querySelector('.app')");
+		await browser.loadFixture("incoming.ts");
+		await browser.wait("typeof window.showIncoming==='function'");
+		const base = incomingView();
+		const view = {
+			...base,
+			entries: [
+				...base.entries,
+				entry(
+					8,
+					"p2.peer-message",
+					{ from: { kind: "external", id: "hermes", title: "Hermes nano" }, text: "Review migration evidence" },
+					"x",
+				),
+			],
+		};
+		await browser.evaluate(`window.showIncoming(${JSON.stringify(view)})`);
+		await browser.wait("document.querySelector('[data-from=external]')");
+		assert.match(
+			await browser.evaluate<string>("document.querySelector('[data-from=external] .incoming-line').textContent"),
+			/Hermes nano · \(external peer\) wrote/,
+		);
+		assert.equal(
+			await browser.evaluate(
+				"Boolean(document.querySelector('[data-from=external] button.incoming-from, [data-from=external] .incoming-chevron'))",
+			),
+			false,
+		);
+	});
+
 	it("opens a subagent's conversation and another session from a message's header; Back returns", async () => {
 		const owner = fixture.browser();
 		await owner

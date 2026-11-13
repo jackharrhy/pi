@@ -87,7 +87,13 @@ export function renderEntry(entry: EntryRecord, results: ReadonlyMap<string, boo
 	if (!message) return undefined;
 	if (message.role === "user") {
 		const peer = peerMessage(entry.kind, entry.data);
-		if (peer) return { entry: id, role: "user", author: `session ${peer.from.title}`, text: peer.text };
+		if (peer)
+			return {
+				entry: id,
+				role: "user",
+				author: `${peer.from.kind === "external" ? "external peer" : "session"} ${peer.from.title}`,
+				text: peer.text,
+			};
 		const person = messageData(entry.data);
 		if (person)
 			return {

@@ -166,6 +166,17 @@ describe("history tools", () => {
 			new Map(),
 		);
 		assert.deepEqual(attached, { entry: 4, role: "user", author: "Ann", text: "see\n[attachment: a.png]" });
+		for (const kind of [undefined, "external"] as const) {
+			const peer = renderEntry(
+				entry(5, {
+					kind: "p2.peer-message",
+					data: { from: { id: "hermes", title: "Hermes nano", ...(kind ? { kind } : {}) }, text: "review" },
+					model: [{ role: "user", content: "review", timestamp: 0 }],
+				}),
+				new Map(),
+			);
+			assert.equal(peer?.author, `${kind ? "external peer" : "session"} Hermes nano`);
+		}
 		const big = [1, 2, 3].map((id) => ({ entry: id, role: "user" as const, text: "x".repeat(30_000) }));
 		const { kept, truncated } = withinBudget(big);
 		assert.equal(kept.length, 1);

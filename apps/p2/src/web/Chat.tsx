@@ -342,11 +342,11 @@ function Incoming({ item }: { item: Extract<Item, { type: "user" }> }) {
 			}
 		: peer
 			? {
-					kind: "session",
+					kind: peer.kind ?? "session",
 					icon: <CommentIcon />,
 					name: peer.title.trim() || "Conversation",
-					what: "wrote",
-					...(openPeer ? { open: () => openPeer(peer.id) } : {}),
+					what: peer.kind === "external" ? "(external peer) wrote" : "wrote",
+					...(openPeer && peer.kind !== "external" ? { open: () => openPeer(peer.id) } : {}),
 				}
 			: {
 					kind: "guest",

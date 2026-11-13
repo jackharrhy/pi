@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type EntryId, type EntryRecord, ROOT_CONVERSATION_ID } from "@earendil-works/pi-durable";
 import { ScrollView } from "@earendil-works/pi-tui";
+import { UserMessageComponent } from "../../src/tui/components/messages.ts";
 import { TranscriptView } from "../../src/tui/components/transcript.ts";
 import { ThemeRef } from "../../src/tui/theme/ref.ts";
 import { BUILTIN_THEMES, createTheme } from "../../src/tui/theme/theme.ts";
@@ -25,6 +26,36 @@ const transcriptOf = (ids: number[]) =>
 			docs: {},
 		}),
 	);
+
+test("external peers retain truthful attribution in the shared model and TUI", () => {
+	const entry: EntryRecord = {
+		...user(1),
+		kind: "p2.peer-message",
+		data: { from: { kind: "external", id: "hermes", title: "Hermes nano" }, text: "Review evidence" },
+	};
+	const transcript = buildTranscript(
+		wholeView({
+			conversation: { id: ROOT_CONVERSATION_ID } as Parameters<typeof wholeView>[0]["conversation"],
+			entries: [entry],
+			docs: {},
+		}),
+	);
+	const item = transcript.items[0]!;
+	assert.equal(item.type, "user");
+	if (item.type !== "user") throw new Error("Expected user item");
+	assert.equal(item.peer?.kind, "external");
+	assert.equal(item.author, undefined);
+	const component = new UserMessageComponent(item, {
+		theme: new ThemeRef(createTheme(BUILTIN_THEMES.dark!, "truecolor")),
+		keyText: () => "ctrl+o",
+		requestRender: () => {},
+		markdownTransformers: [],
+	});
+	const rendered = component.render(100).join("\n");
+	assert.match(rendered, /Hermes nano/);
+	assert.match(rendered, /external peer/);
+	assert.doesNotMatch(rendered, /from another session/);
+});
 
 test("a render whose onTop syncs a longer transcript does not crash", () => {
 	const view = new TranscriptView(

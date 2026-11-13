@@ -12,13 +12,9 @@ import type {
 	TranscriptItem,
 	TranscriptView,
 } from "@earendil-works/pi-durable";
-
-import { type AgentMessage, agentMessage, peerMessage } from "../runtime/entries.ts";
-import { type ShownImage, shownImage } from "../runtime/entry-images.ts";
-
-type ConversationPeer = { id: string; title: string };
-
 import { type AssistantCost, cacheHitRate } from "../runtime/conversation-stats.ts";
+import { type AgentMessage, agentMessage, type PeerMessage, peerMessage } from "../runtime/entries.ts";
+import { type ShownImage, shownImage } from "../runtime/entry-images.ts";
 import { type MessageData, messageData } from "../runtime/input.ts";
 import { fileReferences } from "../runtime/references.ts";
 import type { Author } from "../runtime/sender.ts";
@@ -71,7 +67,7 @@ export type Item =
 			key: string;
 			text: string;
 			author?: Author;
-			peer?: Pick<ConversationPeer, "id" | "title">;
+			peer?: PeerMessage["from"];
 			/** A subagent's message (its report, a question or a note), from the entry's data. */
 			agent?: Pick<AgentMessage, "from" | "intent">;
 			images: ShownImage[];
@@ -549,20 +545,23 @@ export function buildTranscript(
 			attempt: status.attempt,
 			...(status.retry ? { retry: status.retry } : {}),
 		})),
-		queued: (inbox?.items ?? []).flatMap((item) =>
-			item.mode === "write"
-				? []
-				: [
-						{
-							id: item.id,
-							mode: item.mode,
-							text:
-								messageData(item.entry?.data)?.text ??
-								(item.entry && peerMessage(item.entry.kind, item.entry.data)?.text) ??
-								text(item.content),
-						},
-					],
-		),
+		queued: (inbox?.items ?? []).flatMap((item) => {
+			if (item.mode === "write") return [];
+			const peer = item.entry && peerMessage(item.entry.kind, item.entry.data);
+			return [
+				{
+					id: item.id,
+					mode: item.mode,
+					text:
+						messageData(item.entry?.data)?.text ??
+						(peer &&
+							(peer.from.kind === "external"
+								? `${peer.from.title} (external peer): ${peer.text}`
+								: peer.text)) ??
+						text(item.content),
+				},
+			];
+		}),
 		agent: (view.docs["pi.agent"] ?? {}) as AgentState,
 	};
 }
