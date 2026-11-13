@@ -142,6 +142,7 @@ import { Chat, ChatCosts, conversationTargetId, TranscriptEntries } from "./cont
 import { DraftEditor } from "./draft-editor.tsx";
 import { newSessionChoice, thinkingLevelOf } from "./model-choice.ts";
 import { type Outgoing, outboxOf } from "./outbox.ts";
+import { Queue } from "./Queue.tsx";
 import { sessionStart } from "./session-start.ts";
 
 /** An upload the server answered with an error status. */
@@ -1463,7 +1464,7 @@ function SessionChat({ sessionId, conversationId }: { sessionId: string; convers
 		</div>
 	);
 	const queuedRows = queued.length + pendingQueued.length > 0 && (
-		<div className="queued">
+		<Queue key={cacheKey} count={queued.length + pendingQueued.length}>
 			{pendingQueued.map((message) => (
 				<div key={`outgoing-${message.id}`}>
 					<button
@@ -1519,7 +1520,7 @@ function SessionChat({ sessionId, conversationId }: { sessionId: string; convers
 					</button>
 				</div>
 			))}
-		</div>
+		</Queue>
 	);
 	const place = useChatScreen(
 		{
