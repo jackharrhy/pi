@@ -44,6 +44,7 @@ export function ActivityLink({
 				aria-describedby={id}
 				onMouseEnter={(event) => show(event.currentTarget)}
 				onMouseLeave={(event) => {
+					if (event.relatedTarget instanceof Node && popup.current?.contains(event.relatedTarget)) return;
 					if (!touch.current && document.activeElement !== event.currentTarget) close();
 				}}
 				onFocus={(event) => show(event.currentTarget)}
@@ -64,7 +65,18 @@ export function ActivityLink({
 			>
 				<span className="nav-label">{children}</span>
 			</SideNavigation.Link>
-			<div ref={popup} id={id} popover="auto" role="tooltip" className="session-activity-popover">
+			<div
+				ref={popup}
+				id={id}
+				popover="auto"
+				role="tooltip"
+				className="session-activity-popover"
+				onMouseLeave={(event) => {
+					const anchor = event.currentTarget.previousElementSibling;
+					if (event.relatedTarget instanceof Node && anchor?.contains(event.relatedTarget)) return;
+					if (document.activeElement !== anchor) close();
+				}}
+			>
 				{activity}
 			</div>
 		</>

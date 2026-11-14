@@ -78,7 +78,15 @@ test(
 		);
 		await browser.wait(`document.querySelector(${JSON.stringify(popup)})`);
 		await browser.evaluate(
-			`document.querySelector(${JSON.stringify(link)}).dispatchEvent(new MouseEvent('mouseout', {bubbles:true,relatedTarget:document.body}))`,
+			`document.querySelector(${JSON.stringify(link)}).dispatchEvent(new MouseEvent('mouseout', {bubbles:true,relatedTarget:document.querySelector(${JSON.stringify(popup)})}))`,
+		);
+		assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(popup)}) !== null`), true);
+		assert.notEqual(
+			await browser.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(popup)})).pointerEvents`),
+			"none",
+		);
+		await browser.evaluate(
+			`document.querySelector(${JSON.stringify(popup)}).dispatchEvent(new MouseEvent('mouseout', {bubbles:true,relatedTarget:document.body}))`,
 		);
 		await browser.wait(`!document.querySelector(${JSON.stringify(popup)})`);
 		await browser.click(link);
