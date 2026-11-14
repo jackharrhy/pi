@@ -958,7 +958,8 @@ call, hold, method, relay and activation; nothing is measured or walked for it. 
   writes a separate, whitespace-normalized phrase (160 characters maximum); `text: ""` explicitly clears it. It
   survives idle workers and server restarts. Session-owned Durable content reports revisions through a
   generation-fenced, persisted owner-only server projection; the shared Session schema is unchanged. The web name
-  discloses activity on hover, focus or tap, without a permanent second line; Open session navigates. Existing
+  discloses activity as a noninteractive native tooltip on hover, focus or touch, without a permanent second line;
+  ordinary row clicks still navigate, and outside taps or Escape dismiss the tooltip. Existing
   working/unread marks are unchanged. Activity is not secret: normal tool/conversation history may expose its text
   to shared participants. Tests: `session-activity.test.ts`, `ui-session-activity.test.ts`.
 - **Web sidebar** (`plugins/sessions/sidebar/`; README, Projects): the sessions plugin owns it, because the Session

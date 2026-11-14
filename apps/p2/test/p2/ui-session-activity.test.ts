@@ -1,4 +1,4 @@
-// Browser disclosure for stable names: no secondary line, keyboard/hover/tap activity and explicit navigation.
+// Activity is an incidental tooltip: native row appearance, accessible disclosure and unchanged navigation.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BACKGROUND_CONTEXT } from "@p2/app/v1";
@@ -9,7 +9,7 @@ import { Browser, browserTests } from "./browser.ts";
 import { holdIn, startFixture, until } from "./helpers.ts";
 
 test(
-	"session activity discloses on the name without renaming or replacing row navigation",
+	"session activity keeps native row styling and navigation with hover, focus and touch disclosure",
 	{ skip: !browserTests, timeout: 120_000 },
 	async (t) => {
 		const fixture = await startFixture({ web: true });
@@ -27,45 +27,77 @@ test(
 		await browser.signIn(fixture.owner);
 		await browser.call("Emulation.setFocusEmulationEnabled", { enabled: true });
 		await browser.metrics(1280, 900);
-		await browser.open(`http://127.0.0.1:${fixture.server.port}/s/${other.id}`);
+		const url = `http://127.0.0.1:${fixture.server.port}`;
+		await browser.open(`${url}/s/${other.id}`);
 		const row = `.sidebar-section[data-key=recent] [data-session="${session.id}"]`;
 		const name = `${row} .session-title`;
 		const link = `${row} .session-main`;
-		await browser.wait(`document.querySelector(${JSON.stringify(name)})?.textContent === 'Stable name'`);
+		const popup = ".session-activity-popover:popover-open";
+		await browser.wait(`document.querySelector(${JSON.stringify(link)})?.hasAttribute('aria-describedby')`);
+		assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(popup)}) !== null`), false);
 		assert.equal(
-			await browser.evaluate(`document.querySelector('.session-activity-popover:popover-open') !== null`),
+			await browser.evaluate(`document.querySelector(${JSON.stringify(name)}).textContent`),
+			"Stable name",
+		);
+		// A wrapper, even display:contents, breaks the sidebar's direct-child resets and restores Elanor's gray/padding.
+		assert.equal(
+			await browser.evaluate(`document.querySelector(${JSON.stringify(link)}).parentElement.matches('.nav-row')`),
+			true,
+		);
+		const styles = await browser.evaluate<string[]>(
+			`[${JSON.stringify(link)},${JSON.stringify(`.sidebar-section[data-key=recent] [data-session="${other.id}"] .session-main`)}].map(selector=>{const s=getComputedStyle(document.querySelector(selector));return JSON.stringify([s.color,s.padding,s.gap,s.fontSize,s.lineHeight])})`,
+		);
+		assert.equal(styles[0], styles[1]);
+		await browser.evaluate(`document.querySelector(${JSON.stringify(link)}).focus()`);
+		await browser.wait(`document.querySelector(${JSON.stringify(popup)})?.textContent === 'Reviewing activity'`);
+		assert.equal(
+			await browser.evaluate(`document.querySelector(${JSON.stringify(popup)}).getAttribute('role')`),
+			"tooltip",
+		);
+		assert.equal(
+			await browser.evaluate(
+				`document.querySelector(${JSON.stringify(popup)}).querySelector('a,button,input,[tabindex]') !== null`,
+			),
 			false,
 		);
-		await browser.wait(`document.querySelector(${JSON.stringify(link)})?.getAttribute('aria-haspopup') === 'dialog'`);
-		await browser.evaluate(`document.querySelector(${JSON.stringify(link)}).focus()`);
-		await browser.wait(
-			`document.querySelector('.session-activity-popover:popover-open')?.textContent.includes('Reviewing activity')`,
+		assert.equal(
+			await browser.evaluate(
+				`document.querySelector(${JSON.stringify(link)}).getAttribute('aria-describedby') === document.querySelector(${JSON.stringify(popup)}).id`,
+			),
+			true,
 		);
-		assert.equal(await browser.evaluate("location.pathname"), `/s/${other.id}`);
 		await browser.call("Input.dispatchKeyEvent", {
 			type: "keyDown",
 			key: "Escape",
 			code: "Escape",
 			windowsVirtualKeyCode: 27,
 		});
-		await browser.wait(`!document.querySelector('.session-activity-popover:popover-open')`);
+		await browser.wait(`!document.querySelector(${JSON.stringify(popup)})`);
 		await browser.evaluate(
-			`document.querySelector(${JSON.stringify(link)}).dispatchEvent(new MouseEvent('mouseover', { bubbles:true }))`,
+			`document.querySelector(${JSON.stringify(link)}).blur(); document.querySelector(${JSON.stringify(link)}).dispatchEvent(new MouseEvent('mouseover', {bubbles:true}))`,
 		);
-		await browser.wait(`document.querySelector('.session-activity-popover:popover-open')`);
-		await browser.click(".session-activity-popover:popover-open button");
-		await browser.click(name);
-		await browser.wait(`document.querySelector('.session-activity-popover:popover-open')`);
-		assert.equal(await browser.evaluate("location.pathname"), `/s/${other.id}`);
-		await browser.click(".session-activity-popover:popover-open a");
+		await browser.wait(`document.querySelector(${JSON.stringify(popup)})`);
+		await browser.evaluate(
+			`document.querySelector(${JSON.stringify(link)}).dispatchEvent(new MouseEvent('mouseout', {bubbles:true,relatedTarget:document.body}))`,
+		);
+		await browser.wait(`!document.querySelector(${JSON.stringify(popup)})`);
+		await browser.click(link);
 		await browser.wait(`location.pathname === '/s/${session.id}'`);
 		await browser.metrics(390, 844);
-		await browser.open(`http://127.0.0.1:${fixture.server.port}/s/${other.id}`);
+		await browser.call("Emulation.setTouchEmulationEnabled", { enabled: true });
+		await browser.open(`${url}/s/${other.id}`);
 		await browser.click(".sidebar-open");
-		await browser.click(name);
-		await browser.wait(`document.querySelector('.session-activity-popover:popover-open')`);
-		assert.equal(await browser.evaluate("location.pathname"), `/s/${other.id}`);
-		await browser.click(".session-activity-popover:popover-open a");
+		await browser.wait(`document.querySelector(${JSON.stringify(link)})?.hasAttribute('aria-describedby')`);
+		await browser.wait(`!document.querySelector('.drawer').getAnimations().some(a => a.playState === 'running')`);
+		const point = await browser.evaluate<{ x: number; y: number }>(
+			`(()=>{const r=document.querySelector(${JSON.stringify(name)}).getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`,
+		);
+		await browser.call("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+		await browser.call("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 		await browser.wait(`location.pathname === '/s/${session.id}'`);
+		await browser.wait(`document.querySelector(${JSON.stringify(popup)})`);
+		await browser.clickPoint(380, 400);
+		await browser.wait(`!document.querySelector(${JSON.stringify(popup)})`);
+		assert.equal(sessions.sessions.value?.find((row) => row.id === session.id)?.title, "Stable name");
 	},
 );
