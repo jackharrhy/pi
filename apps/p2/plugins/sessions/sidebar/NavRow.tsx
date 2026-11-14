@@ -57,7 +57,15 @@ export function NavRow({
 }) {
 	const link = `nav-link ${linkClassName} ${selected ? "active" : ""}`;
 	return (
-		<div className={`nav-row ${selected ? "selected" : ""} ${className}`} {...target}>
+		<div
+			className={`nav-row ${selected ? "selected" : ""} ${className}`}
+			{...target}
+			onPointerLeave={(event) => {
+				// The whole row owns hover: crossing its chevron must not dismiss the name's tooltip.
+				if (activity && event.pointerType === "mouse" && !event.currentTarget.contains(document.activeElement))
+					event.currentTarget.querySelector<HTMLDivElement>(".session-activity-popover")?.hidePopover();
+			}}
+		>
 			{guides}
 			{marker !== undefined && <span className="nav-marker">{marker}</span>}
 			{href === undefined ? (
@@ -101,4 +109,3 @@ export function NavRow({
 		</div>
 	);
 }
-

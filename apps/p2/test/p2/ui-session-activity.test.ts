@@ -22,6 +22,7 @@ test(
 		const activity = await holdIn(owner, SessionActivity, {}, "owner");
 		await chat.send({ text: "set-activity Reviewing activity", requestId: "activity" }, BACKGROUND_CONTEXT);
 		await until(activity.activities, (all) => all?.[session.id] === "Reviewing activity");
+		await chat.send({ text: "subagent", requestId: "child" }, BACKGROUND_CONTEXT);
 		const browser = await Browser.start();
 		t.after(() => browser.close());
 		await browser.signIn(fixture.owner);
@@ -34,6 +35,7 @@ test(
 		const link = `${row} .session-main`;
 		const popup = ".session-activity-popover:popover-open";
 		await browser.wait(`document.querySelector(${JSON.stringify(link)})?.hasAttribute('aria-describedby')`);
+		await browser.wait(`document.querySelector(${JSON.stringify(`${row} .subagent-toggle`)})`);
 		assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(popup)}) !== null`), false);
 		assert.equal(
 			await browser.evaluate(`document.querySelector(${JSON.stringify(name)}).textContent`),
@@ -100,9 +102,7 @@ test(
 			await browser.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(popup)})).pointerEvents`),
 			"none",
 		);
-		await browser.evaluate(
-			`document.querySelector(${JSON.stringify(popup)}).dispatchEvent(new MouseEvent('mouseout', {bubbles:true,relatedTarget:document.body}))`,
-		);
+		await browser.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1000, y: 450 });
 		await browser.wait(`!document.querySelector(${JSON.stringify(popup)})`);
 		await browser.click(link);
 		await browser.wait(`location.pathname === '/s/${session.id}'`);
