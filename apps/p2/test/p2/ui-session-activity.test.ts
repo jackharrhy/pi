@@ -77,10 +77,22 @@ test(
 			`document.querySelector(${JSON.stringify(link)}).blur(); document.querySelector(${JSON.stringify(link)}).dispatchEvent(new MouseEvent('mouseover', {bubbles:true}))`,
 		);
 		await browser.wait(`document.querySelector(${JSON.stringify(popup)})`);
-		await browser.evaluate(
-			`document.querySelector(${JSON.stringify(link)}).dispatchEvent(new MouseEvent('mouseout', {bubbles:true,relatedTarget:document.querySelector(${JSON.stringify(popup)})}))`,
+		const hoverPoints = await browser.evaluate<{
+			anchor: { x: number; y: number };
+			tooltip: { x: number; y: number };
+		}>(
+			`(()=>{const center=s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}};return {anchor:center(${JSON.stringify(link)}),tooltip:center(${JSON.stringify(popup)})}})()`,
 		);
-		assert.equal(await browser.evaluate(`document.querySelector(${JSON.stringify(popup)}) !== null`), true);
+		await browser.call("Input.dispatchMouseEvent", { type: "mouseMoved", ...hoverPoints.anchor });
+		// Walk through the intervening pixels: jumping directly into the tooltip hides a hover-gap regression.
+		for (let step = 1; step <= 30; step++) {
+			await browser.call("Input.dispatchMouseEvent", {
+				type: "mouseMoved",
+				x: hoverPoints.anchor.x + ((hoverPoints.tooltip.x - hoverPoints.anchor.x) * step) / 30,
+				y: hoverPoints.anchor.y + ((hoverPoints.tooltip.y - hoverPoints.anchor.y) * step) / 30,
+			});
+		}
+		await browser.wait(`document.querySelector(${JSON.stringify(popup)})?.matches(':hover')`);
 		assert.notEqual(
 			await browser.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(popup)})).pointerEvents`),
 			"none",
