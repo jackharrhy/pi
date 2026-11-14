@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -120,7 +120,12 @@ test("loader: global then project templates, invalid ones skipped, every skill i
 });
 
 test("PromptResources on the worker: participants only, live templates, expand with skills", async (t) => {
-	const fixture = await startFixture();
+	const home = mkdtempSync(join(tmpdir(), "p2-skills-home-"));
+	t.after(() => rmSync(home, { recursive: true, force: true }));
+	const shared = join(home, ".agents", "skills", "prune-tests");
+	await mkdir(shared, { recursive: true });
+	await writeFile(join(shared, "SKILL.md"), "---\nname: prune-tests\ndescription: Audit tests.\n---\nShared body.");
+	const fixture = await startFixture({ workerEnv: { HOME: home } });
 	t.after(() => fixture.close());
 	await mkdir(join(fixture.dataDir, "prompts"), { recursive: true });
 	await writeFile(join(fixture.dataDir, "prompts", "greet.md"), "---\ndescription: Greets\n---\nHello $1!");
@@ -139,13 +144,23 @@ test("PromptResources on the worker: participants only, live templates, expand w
 	assert.equal(resources.variant, "participant");
 	const templates = await until(resources.templates, (value) => Boolean(value?.length));
 	assert.deepEqual(templates, [{ name: "greet", description: "Greets", source: "global" }]);
-	// The environment's skill, then the built-in plugins' (agent-plugins' guide: a session on the server's machine).
-	const skills = await until(resources.skills, (value) => (value?.length ?? 0) >= 2);
+	// Data, shared home, then plugin skills, including a session created after the shared root exists.
+	const skills = await until(resources.skills, (value) => (value?.length ?? 0) >= 3);
 	assert.deepEqual(
 		skills.map((each) => each.name),
-		["deploy", "writing-p2-plugins"],
+		["deploy", "prune-tests", "writing-p2-plugins"],
 	);
 	assert.equal(skills[0]?.description, "Deploys the app.");
+	const sharedSkill = await resources.expand({ text: "/skill:prune-tests" }, BACKGROUND_CONTEXT);
+	assert.match(sharedSkill.text, /Shared body\./);
+	await writeFile(join(shared, "SKILL.md"), "---\nname: prune-tests\ndescription: Updated audit.\n---\nNew body.");
+	await until(resources.skills, (value) => value?.some((entry) => entry.description === "Updated audit.") === true);
+	const added = join(home, ".agents", "skills", "added");
+	await mkdir(added);
+	await writeFile(join(added, "SKILL.md"), "---\nname: added\ndescription: Added live.\n---\nBody.");
+	await until(resources.skills, (value) => value?.some((entry) => entry.name === "added") === true);
+	await rm(added, { recursive: true });
+	await until(resources.skills, (value) => value?.some((entry) => entry.name === "added") === false);
 	assert.deepEqual(await resources.expand({ text: "/greet world" }, BACKGROUND_CONTEXT), { text: "Hello world!" });
 	const skill = await resources.expand({ text: "/skill:deploy go" }, BACKGROUND_CONTEXT);
 	assert.equal(skill.skill?.name, "deploy");

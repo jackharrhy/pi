@@ -82,3 +82,35 @@ test("skills follow pi's discovery: root .md files, SKILL.md directories, invali
 		],
 	);
 });
+
+test("shared skill roots deduplicate canonical files, keep first names and advertise metadata only", async (t) => {
+	const directory = mkdtempSync(join(tmpdir(), "p2-shared-skills-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const shared = join(directory, "shared");
+	const alias = join(directory, "alias");
+	mkdirSync(shared);
+	symlinkSync(shared, alias);
+	writeFileSync(join(shared, "audit.md"), "---\nname: audit\ndescription: Shared audit.\n---\nPRIVATE BODY");
+	writeFileSync(join(shared, "duplicate.md"), "---\nname: audit\ndescription: Later name.\n---\nLater body");
+	const reads: string[] = [];
+	const files: PromptFiles = {
+		...localFiles,
+		readText: async (path) => {
+			reads.push(path);
+			return localFiles.readText(path);
+		},
+	};
+	const loaded = await loadPromptResources(directory, directory, files, undefined, undefined, [alias, shared]);
+	assert.deepEqual(
+		loaded.skillFiles.map(({ name, path }) => [name, path]),
+		[["audit", join(shared, "audit.md")]],
+	);
+	assert.equal(reads.filter((path) => path === join(shared, "audit.md")).length, 1);
+	assert.match(loaded.skills, /Shared audit\./);
+	assert.doesNotMatch(loaded.skills, /PRIVATE BODY|Later name/);
+	assert.deepEqual(loaded.project?.skillFiles, []);
+	mkdirSync(join(directory, "skills"));
+	writeFileSync(join(directory, "skills", "audit.md"), "---\nname: audit\ndescription: Data wins.\n---\nBody");
+	const preferred = await loadPromptResources(directory, directory, localFiles, undefined, undefined, [shared]);
+	assert.equal(preferred.skillFiles[0]?.description, "Data wins.");
+});

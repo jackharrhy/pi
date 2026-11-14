@@ -101,8 +101,8 @@ export function agentsCandidates(paths: Pick<PlatformPath, "join" | "dirname" | 
 /**
  * Instructions and skills for a session: the global `AGENTS.md` of the data directory (always local), then the
  * project's `AGENTS.md` files and skills under `<directory>/skills` and `<cwd>/.pi/skills` on the local filesystem,
- * then the plugins' skills (`pluginSkillRoots`, given only where they are files of `files`: the server's own machine).
- * The first skill of a name wins: the environment's and the project's before a plugin's.
+ * then shared and plugin skills (`pluginSkillRoots`, given only on the server's own machine).
+ * Canonical local paths are read once. The first skill of a name wins: environment, project, shared, then plugins.
  */
 export async function loadPromptResources(
 	directory: string,
@@ -134,7 +134,11 @@ export async function loadPromptResources(
 	// Plugins' skills count as global ones: a locked session gets them only with the global instructions.
 	const globalSkills = new Set([...environmentSkills, ...pluginSkills]);
 	const paths = [...new Set([...environmentSkills, ...projectSkills, ...pluginSkills])];
-	for (const path of paths) {
+	const seen = new Set<string>();
+	for (const original of paths) {
+		const path = files.local ? await canonical(original) : original;
+		if (seen.has(path)) continue;
+		seen.add(path);
 		const content = await files.readText(path);
 		if (content === undefined) continue;
 		fingerprint.push(`${path}\n${content}`);
@@ -159,7 +163,7 @@ export async function loadPromptResources(
 				description,
 				path,
 				disabled: frontmatter["disable-model-invocation"] === true,
-				global: globalSkills.has(path),
+				global: globalSkills.has(original),
 			});
 	}
 	// Prompt templates (pi's format): `.md` files directly in the global and the project's prompts directory. An

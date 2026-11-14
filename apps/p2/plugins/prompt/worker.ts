@@ -1,5 +1,6 @@
 // Prompt resources of a session: the app guide, AGENTS.md files (global and the project's) and skills, watched and
 // reloaded without restarting the worker.
+import { homedir } from "node:os";
 import * as nodePath from "node:path";
 import { join } from "node:path";
 import {
@@ -54,7 +55,7 @@ import { expandPrompt } from "./templates.ts";
 export function appGuide(app: string, dataDir: string, env?: string | null): string {
 	const skills = env
 		? `${JSON.stringify("~/.pi/p2/skills")} on the remote environment "${env}"`
-		: JSON.stringify(join(dataDir, "skills"));
+		: `${JSON.stringify(join(dataDir, "skills"))}; shared skills: ${JSON.stringify(join(homedir(), ".agents", "skills"))}`;
 	return `You are running inside Pi (p2, the plugin-based Pi Mobile).
 Application source and documentation: ${JSON.stringify(app)} (not the session cwd). For app changes, first read docs/handoff.md and docs/p2-notes.md there; plugins live in plugins/<name>/. Read them only when working on the app itself.
 Private configuration/data: ${JSON.stringify(dataDir)}. Models: ${JSON.stringify(join(dataDir, "models.json"))}; settings: ${JSON.stringify(join(dataDir, "settings.json"))}; global instructions: ${JSON.stringify(join(dataDir, "AGENTS.md"))}; skills: ${skills}. Before editing, read ${JSON.stringify(join(app, "README.md"))}'s Configuration section and plugins/models/model-config.ts or src/runtime/settings.ts under the app directory. Valid configuration changes hot-reload; in-flight requests keep their captured configuration.
@@ -258,7 +259,10 @@ export default defineFacet((host) => {
 		const worker = workerOf(self);
 		const harness = harnessOf(self);
 		const skills = self.registry(PluginSkills);
-		const pluginSkills = () => [...skills.value.values()].map((entry) => entry.dir).sort();
+		const pluginSkills = () => [
+			join(homedir(), ".agents", "skills"),
+			...[...skills.value.values()].map((entry) => entry.dir).sort(),
+		];
 		const filesResource = self.open(
 			async () => {
 				const environments = harness().environments;
