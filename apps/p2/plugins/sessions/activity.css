@@ -11,4 +11,13 @@
 	color: var(--text);
 	font-size: var(--fs-sm);
 	overflow-wrap: anywhere;
+	overflow: visible;
+}
+/* Keep the space to the label hoverable, so slow pointer movement cannot dismiss the tooltip en route. */
+.session-activity-popover::before {
+	content: "";
+	position: absolute;
+	inset-inline: 0;
+	inset-block-end: 100%;
+	height: var(--s2);
 }

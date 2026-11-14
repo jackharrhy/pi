@@ -85,11 +85,14 @@ test(
 		);
 		await browser.call("Input.dispatchMouseEvent", { type: "mouseMoved", ...hoverPoints.anchor });
 		// Walk through the intervening pixels: jumping directly into the tooltip hides a hover-gap regression.
-		for (let step = 1; step <= 30; step++) {
+		const steps = Math.ceil(
+			Math.hypot(hoverPoints.tooltip.x - hoverPoints.anchor.x, hoverPoints.tooltip.y - hoverPoints.anchor.y),
+		);
+		for (let step = 1; step <= steps; step++) {
 			await browser.call("Input.dispatchMouseEvent", {
 				type: "mouseMoved",
-				x: hoverPoints.anchor.x + ((hoverPoints.tooltip.x - hoverPoints.anchor.x) * step) / 30,
-				y: hoverPoints.anchor.y + ((hoverPoints.tooltip.y - hoverPoints.anchor.y) * step) / 30,
+				x: hoverPoints.anchor.x + ((hoverPoints.tooltip.x - hoverPoints.anchor.x) * step) / steps,
+				y: hoverPoints.anchor.y + ((hoverPoints.tooltip.y - hoverPoints.anchor.y) * step) / steps,
 			});
 		}
 		await browser.wait(`document.querySelector(${JSON.stringify(popup)})?.matches(':hover')`);
