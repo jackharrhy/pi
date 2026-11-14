@@ -49,6 +49,11 @@ final class ServerController {
 			.appending(path: "Library/Logs/Pi/server-\(config.port).log")
 		pidFile = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
 			.appending(path: "Pi/server-\(config.port).pid")
+		if config.remoteURL != nil {
+			phase = .running
+			ownership = .external
+			return
+		}
 		timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
 			Task { @MainActor in await self?.poll() }
 		}
@@ -62,7 +67,7 @@ final class ServerController {
 	var canStop: Bool { ownership == .managed && phase != .stopping }
 
 	var canRestart: Bool {
-		phase == .running && (ownership == .managed || DevControl.available(dataDir: config.dataDir))
+		config.remoteURL == nil && phase == .running && (ownership == .managed || DevControl.available(dataDir: config.dataDir))
 	}
 
 	private var isFailed: Bool {
@@ -79,7 +84,7 @@ final class ServerController {
 
 	/// Probes the port and updates the state.
 	func poll() async {
-		guard !polling else { return }
+		guard config.remoteURL == nil, !polling else { return }
 		polling = true
 		let healthy = await Self.healthy(config.origin)
 		if healthy, child == nil, config.source == .own, let pid = recordedPID(), kill(pid, 0) == 0,
@@ -146,6 +151,7 @@ final class ServerController {
 
 	/// Restarts the server: ours by stopping and starting it, a dev-mode one through its supervisor.
 	func restart() async {
+		guard config.remoteURL == nil else { return }
 		if ownership == .managed {
 			restartAfterExit = true
 			stop()

@@ -3,6 +3,7 @@
 #   make run          own server, local only: port 8798, data in ~/.pi/p2-mac/local (FAKE=1: faux provider)
 #   make run-radius   own server connected to Radius: port 8799, data in ~/.pi/p2-mac/radius (signs in on first use)
 #   make attach       the p2 already running on 127.0.0.1:8788 with ~/.pi/p2 (ATTACH_PORT, ATTACH_DATA_DIR)
+#   make remote REMOTE_URL=https://pi.example.com   web client only, no local p2 or Node needed
 #
 # p2 runs one server per data directory and Radius is on exactly when <data>/radius.json exists, so each own-server
 # target gets its own data directory and port and leaves the server on 8788 alone.
@@ -17,12 +18,13 @@ RADIUS_DATA_DIR ?= $(HOME)/.pi/p2-mac/radius
 ATTACH_PORT ?= 8788
 ATTACH_DATA_DIR ?= $(HOME)/.pi/p2
 FAKE ?=
+REMOTE_URL ?=
 
 # `-source own` overrides a server chosen in the menu (saved as `source=attached`, which wins over P2MAC_PORT) for this
 # launch only: it lands in the argument domain of the user defaults, which is never persisted.
 OWN_ENV = P2MAC_CHECKOUT="$(CHECKOUT)" P2MAC_FAKE="$(FAKE)"
 
-.PHONY: build run run-radius radius-login attach clean checkout-ready
+.PHONY: build run run-radius radius-login attach remote clean checkout-ready
 
 build:
 	./scripts/build-app.sh
@@ -50,6 +52,10 @@ radius-login:
 attach: build
 	@curl -fsS "http://127.0.0.1:$(ATTACH_PORT)/health" >/dev/null || { echo "No p2 answers on 127.0.0.1:$(ATTACH_PORT)"; exit 1; }
 	P2MAC_ATTACH=$(ATTACH_PORT) P2MAC_DATA_DIR="$(ATTACH_DATA_DIR)" $(APP_BIN)
+
+remote: build
+	@test -n "$(REMOTE_URL)" || { echo "Use make remote REMOTE_URL=https://pi.example.com"; exit 1; }
+	P2MAC_URL="$(REMOTE_URL)" $(APP_BIN)
 
 clean:
 	rm -rf build .build

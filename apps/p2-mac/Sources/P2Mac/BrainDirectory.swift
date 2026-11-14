@@ -67,7 +67,7 @@ final class BrainDirectory {
 	}
 
 	private func poll() async {
-		guard !fixture else { return }
+		guard server.config.remoteURL == nil, !fixture else { return }
 		guard radius.signedIn else {
 			if !list.servers.isEmpty || showsTabs { accountChanged() }
 			return
@@ -87,6 +87,12 @@ final class BrainDirectory {
 	/// Recomputes the tabs after the local server or Radius's list changed.
 	func rebuild() {
 		let config = server.config
+		if let url = config.remoteURL {
+			let remote = Brain(id: "web-\(url.absoluteString)", name: url.host ?? "Remote Pi", organization: nil,
+				shared: false, status: .unknown, route: .web(origin: url))
+			publish([remote], showsTabs: false)
+			return
+		}
 		let localID = Self.radiusServerID(config.dataDir) ?? "local-\(config.port)"
 		let localStatus: Brain.Status = server.phase == .running ? .online : .offline
 		let direct = Brain.Route.direct(origin: config.origin, dataDir: config.dataDir)
@@ -115,9 +121,13 @@ final class BrainDirectory {
 			tabs.insert(Brain(id: localID, name: name, organization: nil, shared: false, status: localStatus, route: direct), at: 0)
 		}
 		let shows = fixture || (radius.signedIn && enabled)
-		guard tabs != brains || shows != showsTabs else { return }
+		publish(tabs, showsTabs: shows)
+	}
+
+	private func publish(_ tabs: [Brain], showsTabs: Bool) {
+		guard tabs != brains || showsTabs != self.showsTabs else { return }
 		brains = tabs
-		showsTabs = shows
+		self.showsTabs = showsTabs
 		NotificationCenter.default.post(name: Self.changed, object: self)
 	}
 

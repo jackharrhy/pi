@@ -47,8 +47,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 		let menu = NSMenu()
 		menu.delegate = self
 		statusItem.menu = menu
-		use(.load())
-		Task { found = await ServerScan.scan() }
+		do {
+			let config = try ServerConfig.load()
+			use(config)
+			if config.remoteURL == nil { Task { found = await ServerScan.scan() } }
+		} catch {
+			let alert = NSAlert()
+			alert.messageText = "Cannot open remote Pi"
+			alert.informativeText = error.localizedDescription
+			alert.runModal()
+			NSApp.terminate(nil)
+		}
 	}
 
 	func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
@@ -60,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
 	// The spike's server is a child of the app: stop it with the app. (The LaunchAgent will outlive the app.)
 	func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-		guard server.ownership == .managed, !quitting else { return .terminateNow }
+		guard let server, server.ownership == .managed, !quitting else { return .terminateNow }
 		quitting = true
 		server.stop()
 		Task {
@@ -98,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 			radius.server = controller
 		} else {
 			radius = RadiusAccount(server: controller)
-			if radius.headless { signInToRadius() }
+			if controller.config.remoteURL == nil, radius.headless { signInToRadius() }
 		}
 		if let directory { directory.server = controller } else { directory = BrainDirectory(server: controller, radius: radius) }
 		MainMenu.updateBrains(directory.brains)
@@ -153,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
 	@objc func newWindow(_ sender: Any?) {
 		let current = (NSApp.keyWindow?.delegate as? PiWindowController)?.selected
-		if let id = current ?? directory.local?.id { openWindow(id, path: "/") }
+		if let id = current ?? directory.local?.id ?? directory.brains.first?.id { openWindow(id, path: "/") }
 	}
 
 	// MARK: - Appearance
@@ -174,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 	}
 
 	func validateMenuItem(_ item: NSMenuItem) -> Bool {
+		if item.action == #selector(openSignInLink) { return server?.config.remoteURL != nil }
 		if item.action == #selector(chooseAppearance) {
 			item.state = item.representedObject as? String == appearance.rawValue ? .on : .off
 		}
@@ -191,6 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 	// The scan takes up to a second. Rebuilding the open menu afterwards would resize it under the pointer, so only the
 	// Server submenu takes its result; it shows the previous scan until then.
 	func menuWillOpen(_ menu: NSMenu) {
+		guard server.config.remoteURL == nil else { return }
 		Task {
 			found = await ServerScan.scan()
 			fillServerMenu()
@@ -212,7 +223,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 			menu.addItem(item("Show Server Log", #selector(showLog)))
 		}
 		menu.addItem(.separator())
-		if directory.fixture {
+		if config.remoteURL != nil {
+			menu.addItem(item("Open Sign-In Link…", #selector(openSignInLink)))
+		} else if directory.fixture {
 			menu.addItem(disabled("Radius: brains from P2MAC_BRAINS"))
 		} else if radius.signedIn {
 			menu.addItem(disabled("Signed in to Radius · with this Mac's Pi"))
@@ -248,10 +261,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 		own.isEnabled = config.checkout != nil
 		menu.addItem(own)
 		menu.addItem(item("Choose p2 Checkout…", #selector(chooseCheckout)))
+		menu.addItem(.separator())
+		menu.addItem(item("Connect to Remote Pi…", #selector(connectRemote)))
 	}
 
 	private func statusLine() -> String {
-		switch server.phase {
+		if server.config.remoteURL != nil { return "Remote Pi · web client" }
+		return switch server.phase {
 		case .checking: "Looking for Pi…"
 		case .starting: "Pi is starting…"
 		case .running: "Pi is running · On this Mac"
@@ -263,6 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
 	private func detailLine() -> String {
 		let config = server.config
+		if let url = config.remoteURL { return url.absoluteString }
 		var detail = "127.0.0.1:\(config.port) · \(abbreviate(config.dataDir.path))"
 		if server.ownership == .external || config.source == .attached {
 			detail += DevControl.available(dataDir: config.dataDir) ? " · run elsewhere (dev)" : " · run elsewhere"
@@ -270,7 +287,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 		return detail
 	}
 
+	@objc func connectRemote(_ sender: Any?) {
+		let field = NSTextField(string: server.config.remoteURL?.absoluteString ?? "")
+		field.placeholderString = "https://pi.example.com"
+		field.setAccessibilityLabel("Server address")
+		field.frame = NSRect(x: 0, y: 0, width: 420, height: 24)
+		let alert = NSAlert()
+		alert.messageText = "Connect to Remote Pi"
+		alert.informativeText = "Enter the server address, not a sign-in link. No local server or Radius account is needed."
+		alert.accessoryView = field
+		alert.addButton(withTitle: "Connect")
+		alert.addButton(withTitle: "Cancel")
+		alert.window.initialFirstResponder = field
+		NSApp.activate()
+		guard alert.runModal() == .alertFirstButtonReturn else { return }
+		do {
+			let config = try ServerConfig.remote(field.stringValue)
+			ServerConfig.saveRemote(config.origin)
+			use(config)
+		} catch {
+			let failure = NSAlert()
+			failure.messageText = "Invalid server address"
+			failure.informativeText = error.localizedDescription
+			failure.runModal()
+		}
+	}
+
+	@objc func openSignInLink(_ sender: Any?) {
+		guard let origin = server.config.remoteURL else { return }
+		openPi(nil)
+		guard let page = windows.last?.page else { return }
+		let field = NSSecureTextField(string: "")
+		field.setAccessibilityLabel("Owner sign-in link")
+		field.frame = NSRect(x: 0, y: 0, width: 420, height: 24)
+		let alert = NSAlert()
+		alert.messageText = "Open Sign-In Link"
+		alert.informativeText = "Paste a fresh owner sign-in link for \(origin.host ?? "this Pi"). It is opened here, not saved in app preferences."
+		alert.accessoryView = field
+		alert.addButton(withTitle: "Sign In")
+		alert.addButton(withTitle: "Cancel")
+		alert.window.initialFirstResponder = field
+		NSApp.activate()
+		guard alert.runModal() == .alertFirstButtonReturn else { return }
+		guard let url = URL(string: field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)),
+			url.user == nil, url.password == nil, page.brain.route.contains(url)
+		else {
+			let failure = NSAlert()
+			failure.messageText = "Sign-in link must use this Pi's address"
+			failure.informativeText = origin.absoluteString
+			failure.runModal()
+			return
+		}
+		page.openSignInLink(url)
+	}
+
 	@objc func signInToRadius() {
+		guard server.config.remoteURL == nil else { return }
 		Task {
 			do {
 				try await radius.signIn()

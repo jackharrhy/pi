@@ -1,11 +1,41 @@
 # p2-mac (spike)
 
-A native macOS app for p2. It has two parts:
+A native macOS app for p2. It can run a local server or act as a thin client for an existing remote p2:
 
 - **A menu bar item** that finds or runs the local p2 server.
 - **Windows** that show p2's web UI in a WKWebView, signed in as the local owner without a token to paste.
 
+Remote-only mode uses the same native windows, theme controls, downloads and persistent WebKit cookie stores, without starting Node, accessing a local owner key or requiring Radius.
+
 It is AppKit with WKWebView, macOS 14 or later, and has no dependencies. The plan is the session artifact `pi-desktop-plan`.
+
+## Remote thin client (personal `jack` fork)
+
+On a Mac with Swift 6 / Xcode 16 or newer command-line tools:
+
+```sh
+git clone --branch jack https://github.com/jackharrhy/pi.git
+cd pi/apps/p2-mac
+make remote REMOTE_URL=https://pi.jackharrhy.dev
+```
+
+This builds an ad-hoc-signed `build/Pi.app` and runs it in the foreground. No npm install, Node, model data or local p2 is needed. Ctrl-C quits only this client; the remote server stays running.
+
+1. Use **File > Connect to Remote Pi…** to save the server address for later launches. `P2MAC_URL` (used by `make remote`) overrides it for that launch only.
+2. Sign in inside the app. Safari's cookies are separate. Use **File > Open Sign-In Link…** to paste a fresh, one-time owner sign-in link issued by the server's existing Devices flow. The link must belong to the configured origin; it is not saved in app preferences. Do not put it in shell commands, screenshots or the saved server address.
+3. Quit and reopen `build/Pi.app`: the WebKit cookie store retains sign-in, subject to normal expiry and server-side revocation. Each remote origin has a separate store.
+
+Only root server origins are accepted: HTTPS, or HTTP on loopback for development. Credentials, paths, queries and fragments are rejected in the saved address. Links to other origins open in your default browser. There are no remote Start/Stop/Restart or Radius controls. Switch back to local mode through the menu bar's **Server** submenu.
+
+### Mac verification checklist
+
+Native build and interactive checks require macOS; they cannot be verified on the Linux p2 host.
+
+- Build and launch with no checkout selected, no Node, and no local p2 listening; only the remote sign-in page should open.
+- Sign in with a fresh link, navigate sessions, open a second window, quit/relaunch, and verify retained sign-in. A different-origin sign-in link must be rejected.
+- Change **View > Appearance** and p2's theme button; check both directions, including System and reduced motion.
+- Check copy/paste, file upload, downloads and external links. An unreachable server should offer **Try Again**, not start a local process.
+- Revoke the app's device from p2 and confirm it loses access. Confirm quitting never stops the remote server.
 
 ## Build and run
 
@@ -43,6 +73,7 @@ Each setting is a user default (`defaults write com.earendil.pi <key> <value>`).
 | `fake` | `P2MAC_FAKE` | off (`1`: the faux provider) |
 | `source`, `attachedPort`, `attachedDataDir` | `P2MAC_ATTACH` (a port; `P2MAC_DATA_DIR` is then its data directory) | the app's own server |
 | `appearance` | none | `system` (`light`, `dark`) |
+| `remoteURL` (`source=remote`) | `P2MAC_URL` | none (HTTPS origin; HTTP only on loopback) |
 
 `P2MAC_DIAG_DIR` makes every finished page load write `page-N.json` (what the page sees, its theme included) and snapshots of the page and the window (`page-N.png`, `window-N.png`) into that directory. With `P2MAC_DIAG_BRIDGE=<preference>` as well, the first page drives the host bridge once (`bridge-N.json`): it reads and sets the preference, checks the event, has an invalid value, a frame inside the page and a page on another origin refused, picks System in View > Appearance, clicks p2's theme button twice and then double-clicks it, changes the theme four more times (p2's button and the bridge, each way) while grabbing the windows with `screencapture` 0, 80, 160 and 300 ms after each change (`fade-N-*.png`, with a millisecond clock stamped into the page, and the page's view transition timing in `bridge-N.json`), and reloads over a stale stored theme, which the reload's record removes again. The grabs bring the window in front of other apps' windows and need the terminal's Screen Recording permission.
 

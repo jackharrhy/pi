@@ -49,7 +49,7 @@ final class BrainPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadD
 		webView.allowsBackForwardNavigationGestures = true
 		webView.allowsMagnification = true
 		super.init()
-		if brain.isDirect {
+		if brain.route.origin != nil {
 			ChromeScript.install(in: configuration.userContentController) { [weak webView] rects in
 				webView?.interactive = rects
 			}
@@ -79,19 +79,21 @@ final class BrainPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadD
 		if case .remote = brain.route {
 			loaded = true
 			Task { await openRemote() }
+		} else if case .web = brain.route {
+			Task { await connect() }
 		}
 	}
 
 	/// Whether `url` is this Pi's own page: its loopback origin, or its forwarded origin.
 	private func owns(_ url: URL) -> Bool {
-		if brain.isDirect { return brain.route.contains(url) }
+		if brain.route.origin != nil { return brain.route.contains(url) }
 		guard let remoteOrigin else { return false }
 		return url.scheme == remoteOrigin.scheme && url.host == remoteOrigin.host
 	}
 
 	/// Whether a frame on `origin` is this Pi's own: only those get the microphone and the host bridge.
 	func owns(_ origin: WKSecurityOrigin) -> Bool {
-		let page: URL? = brain.isDirect ? brain.route.url("/") : remoteOrigin
+		let page = brain.route.origin ?? remoteOrigin
 		guard let page else { return false }
 		return origin.protocol == page.scheme && origin.host == page.host && origin.port == (page.port ?? 0)
 	}
@@ -134,7 +136,14 @@ final class BrainPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadD
 	// MARK: - Loading
 
 	private func connect() async {
-		guard !connecting, !loaded, case .direct(let origin, let dataDir) = brain.route else { return }
+		guard !connecting, !loaded else { return }
+		if case .web = brain.route {
+			placeholder.show(title: "Connecting to \(brain.name)…", detail: nil, action: nil)
+			loaded = true
+			webView.load(URLRequest(url: brain.route.url(path)))
+			return
+		}
+		guard case .direct(let origin, let dataDir) = brain.route else { return }
 		connecting = true
 		defer { connecting = false }
 		placeholder.show(title: "Signing in…", detail: nil, action: nil)
@@ -171,6 +180,12 @@ final class BrainPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadD
 			return
 		}
 		if loaded { webView.reload() } else { Task { await connect() } }
+	}
+
+	/// Opens an owner-provided sign-in link without saving it in app preferences.
+	func openSignInLink(_ url: URL) {
+		loaded = true
+		webView.load(URLRequest(url: url))
 	}
 
 	func setZoom(_ zoom: CGFloat) {
@@ -326,7 +341,7 @@ final class BrainPage: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadD
 
 	/// Tells the page how much of its top-left corner the window buttons take: none under a tab bar or in full screen.
 	func updateInset() {
-		guard brain.isDirect else { return }
+		guard brain.route.origin != nil else { return }
 		guard bare, let window, !window.styleMask.contains(.fullScreen),
 			let zoom = window.standardWindowButton(.zoomButton), let frame = zoom.superview?.convert(zoom.frame, to: nil)
 		else { return ChromeScript.setInset(0, in: webView) }

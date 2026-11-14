@@ -1,4 +1,4 @@
-// Which local p2 server the app uses and how to run it: user defaults, overridden by P2MAC_* environment variables.
+// Which p2 the app uses: a local server or a remote web origin, with launch overrides for saved preferences.
 import Foundation
 
 struct ServerConfig: Equatable {
@@ -7,6 +7,8 @@ struct ServerConfig: Equatable {
 		case own
 		/// The app uses a server someone else runs (a dev checkout in a terminal) and never starts or stops it.
 		case attached
+		/// A web client only: no local process, owner key or Radius account.
+		case remote(URL)
 	}
 
 	enum Mode: String {
@@ -29,19 +31,27 @@ struct ServerConfig: Equatable {
 	/// `P2_FAKE=1`: the faux provider, for demos and tests.
 	var fake: Bool
 
-	var origin: URL { URL(string: "http://127.0.0.1:\(port)")! }
+	var remoteURL: URL? {
+		if case .remote(let url) = source { return url }
+		return nil
+	}
+
+	var origin: URL { remoteURL ?? URL(string: "http://127.0.0.1:\(port)")! }
 
 	static let defaultDataDir = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/p2")
 
 	/// The configuration of this launch. Environment variables win, so tests and dev runs never touch saved settings.
 	/// Only the launch reads it: a server chosen in the menu later is `attached(port:dataDir:)` or `own()`, so the
 	/// launch's overrides (`-source own`, P2MAC_ATTACH) do not undo the choice.
-	static func load() -> ServerConfig {
+	static func load() throws -> ServerConfig {
 		let env = ProcessInfo.processInfo.environment
 		let defaults = UserDefaults.standard
-		// A server chosen in the menu wins over the environment's own-server settings; P2MAC_ATTACH wins over both.
+		if let url = env["P2MAC_URL"] { return try remote(url) }
 		if let port = env["P2MAC_ATTACH"].flatMap(Int.init) {
 			return own().attached(port: port, dataDir: env["P2MAC_DATA_DIR"].map(path) ?? defaultDataDir)
+		}
+		if defaults.string(forKey: "source") == "remote" {
+			return try remote(defaults.string(forKey: "remoteURL") ?? "")
 		}
 		if defaults.string(forKey: "source") == "attached", let port = defaults.string(forKey: "attachedPort").flatMap(Int.init) {
 			return own().attached(port: port, dataDir: defaults.string(forKey: "attachedDataDir").map(path) ?? defaultDataDir)
@@ -74,6 +84,35 @@ struct ServerConfig: Equatable {
 		config.port = port
 		config.dataDir = dataDir
 		return config
+	}
+
+	/// A remote origin only; credentials and sign-in links must never enter saved configuration.
+	static func remote(_ text: String) throws -> ServerConfig {
+		guard var components = URLComponents(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+			let host = components.host, !host.isEmpty,
+			components.scheme == "https" || (components.scheme == "http" && ["localhost", "127.0.0.1", "::1", "[::1]"].contains(host)),
+			components.user == nil, components.password == nil, components.query == nil, components.fragment == nil,
+			components.path.isEmpty || components.path == "/",
+			components.port.map({ (1...65535).contains($0) }) ?? true
+		else { throw RemoteAddressError() }
+		components.path = ""
+		components.host = host.lowercased()
+		if components.port == (components.scheme == "https" ? 443 : 80) { components.port = nil }
+		guard let url = components.url else { throw RemoteAddressError() }
+		var config = own()
+		config.source = .remote(url)
+		return config
+	}
+
+	static func saveRemote(_ url: URL) {
+		UserDefaults.standard.set(url.absoluteString, forKey: "remoteURL")
+		UserDefaults.standard.set("remote", forKey: "source")
+	}
+
+	private struct RemoteAddressError: LocalizedError {
+		var errorDescription: String? {
+			"Enter an HTTPS server address such as https://pi.example.com, without a path, sign-in token or credentials. HTTP is allowed only on loopback."
+		}
 	}
 
 	/// Remembers to use the server on `port` with the data directory `dataDir` from now on.

@@ -63,7 +63,7 @@ final class RadiusAccount {
 
 	/// radius.json as written (p2's `RadiusBrainConfig`): gateway, serverId, credential, and the Pi's own fields.
 	private func stored() -> [String: Any]? {
-		guard let data = try? Data(contentsOf: file) else { return nil }
+		guard server.config.remoteURL == nil, let data = try? Data(contentsOf: file) else { return nil }
 		return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
 	}
 
@@ -86,8 +86,11 @@ final class RadiusAccount {
 
 	/// Signs in through the system browser and writes the credential into radius.json.
 	func signIn() async throws {
+		guard server.config.remoteURL == nil else { throw CancellationError() }
+		let target = server
 		let gateway = defaultGateway
 		let discovery = try await json(URLRequest(url: gateway.appending(path: "v1/oauth")))
+		guard server === target else { throw CancellationError() }
 		// HTTPS, or plain HTTP to a gateway on this machine (development).
 		guard let endpoint = (discovery["authorizationEndpoint"] as? String).flatMap(URL.init(string:)),
 			endpoint.scheme == "https" || (endpoint.scheme == "http" && ["127.0.0.1", "localhost"].contains(endpoint.host))
@@ -97,6 +100,7 @@ final class RadiusAccount {
 		let state = Self.randomURLSafe(bytes: 24)
 		let loopback = try await OAuthLoopback.start()
 		defer { loopback.stop() }
+		guard server === target else { throw CancellationError() }
 		var authorize = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
 		authorize.queryItems = [
 			.init(name: "response_type", value: "code"),
@@ -114,6 +118,7 @@ final class RadiusAccount {
 			NSWorkspace.shared.open(authorize.url!)
 		}
 		let callback = try await loopback.callback()
+		guard server === target else { throw CancellationError() }
 		let query = Dictionary(callback.queryItems?.map { ($0.name, $0.value ?? "") } ?? [], uniquingKeysWith: { a, _ in a })
 		guard query["state"] == state else { throw Failure.http(0, "the sign-in answered for another request") }
 		if let error = query["error"] { throw Failure.http(0, query["error_description"] ?? error) }
@@ -131,6 +136,8 @@ final class RadiusAccount {
 		}
 		config["gateway"] = gateway.absoluteString
 		config["credential"] = credential
+		// A sign-in opened for another server must not follow a later switch into remote-only mode.
+		guard server === target else { throw CancellationError() }
 		try write(config)
 		refusedRefresh = nil
 		NotificationCenter.default.post(name: Self.changed, object: self)
@@ -139,6 +146,7 @@ final class RadiusAccount {
 	/// Removes the credential, which signs the app out and disconnects this Mac's Pi (the caller clears the Radius
 	/// pages' cookies).
 	func signOut() {
+		guard server.config.remoteURL == nil else { return }
 		try? FileManager.default.removeItem(at: file)
 		refreshing?.cancel()
 		refreshing = nil
@@ -212,6 +220,7 @@ final class RadiusAccount {
 	}
 
 	private func refresh() async throws {
+		let target = server
 		guard var config = stored(), let credential = credential(config), let refresh = credential["refresh"] as? String else {
 			throw Failure.signedOut("not signed in")
 		}
@@ -222,6 +231,7 @@ final class RadiusAccount {
 			NotificationCenter.default.post(name: Self.changed, object: self)
 			throw Failure.signedOut(reason)
 		}
+		guard server === target else { throw CancellationError() }
 		// The file again: the Pi may have written meanwhile (what it learned about itself); only the credential is ours.
 		var latest = stored() ?? config
 		latest["credential"] = config["credential"]

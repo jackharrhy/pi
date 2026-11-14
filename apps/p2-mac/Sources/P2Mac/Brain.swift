@@ -18,6 +18,8 @@ struct Brain: Equatable {
 	enum Route: Equatable {
 		/// This Mac's server, on loopback, signed in with the owner key of its data directory.
 		case direct(origin: URL, dataDir: URL)
+		/// A standalone remote p2, signed in through its web UI with cookies kept in this brain's store.
+		case web(origin: URL)
 		/// Another Pi: its UI from Radius's forwarded origin for it (`https://<label>.rdtun.com`), loaded as the page
 		/// itself through a one-minute grant the app gets with the shared Radius credential.
 		case remote(organization: String, server: String)
@@ -52,15 +54,24 @@ struct Brain: Equatable {
 }
 
 extension Brain.Route {
+	/// A known origin, without a Radius grant.
+	var origin: URL? {
+		switch self {
+		case .direct(let origin, _), .web(let origin): origin
+		case .remote: nil
+		}
+	}
+
 	/// The origin pages of this route live on; links elsewhere open in the default browser.
 	func contains(_ url: URL) -> Bool {
-		guard case .direct(let origin, _) = self else { return false }
-		return url.scheme == origin.scheme && url.host == origin.host && (url.port ?? 80) == (origin.port ?? 80)
+		guard let origin else { return false }
+		return url.scheme == origin.scheme && url.host == origin.host
+			&& (url.port ?? (url.scheme == "https" ? 443 : 80)) == (origin.port ?? (origin.scheme == "https" ? 443 : 80))
 	}
 
 	/// The URL of `path`, an address of the brain's UI, on the brain itself.
 	func url(_ path: String) -> URL {
-		guard case .direct(let origin, _) = self else { return URL(string: "about:blank")! }
+		guard let origin else { return URL(string: "about:blank")! }
 		return URL(string: path, relativeTo: origin)?.absoluteURL ?? origin
 	}
 }

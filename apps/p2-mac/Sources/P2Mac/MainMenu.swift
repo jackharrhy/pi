@@ -18,6 +18,8 @@ enum MainMenu {
 		]))
 		main.addItem(submenu("File", [
 			item("New Window", "newWindow:", "n", [.command, .shift]),
+			item("Connect to Remote Pi…", "connectRemote:"),
+			item("Open Sign-In Link…", "openSignInLink:"),
 			.separator(),
 			item("Close Window", "performClose:", "w"),
 		]))
