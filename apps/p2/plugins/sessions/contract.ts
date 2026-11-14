@@ -344,14 +344,14 @@ const SessionsV6 = evolve(SessionsV5, (e) =>
 
 /**
  * Sessions as a principal sees them. The owner lists and manages all; a guest sees its own session; a worker sees
- * and renames only its own session (its principal names it). The provider still serves 3, 4, 5 and 6 (its
+ * only its own session (its principal names it). The provider still serves 3, 4, 5 and 6 (its
  * `accepts`): pages and TUIs loaded before a deploy keep working. 7: a branch's `parent` (the sidebar's tree), in rows
  * and in `treeSelf`.
  *
  * The worker's `treeSelf`: the session's main conversation or its branches changed (a `/tree` switch or fork, a branch
  * renamed), or the worker started; the catalog entry follows, so clients open the main one and list the branches.
  */
-export const Sessions = evolve(SessionsV6, (e) =>
+const SessionsV7 = evolve(SessionsV6, (e) =>
 	e
 		.state("owner", "sessions", arr(SessionSchema))
 		.state("guest", "sessions", arr(SessionSchema))
@@ -361,6 +361,9 @@ export const Sessions = evolve(SessionsV6, (e) =>
 		.result("fork", SessionSchema)
 		.args("treeSelf", obj({ main: int({ minimum: 1 }), branches: arr(BranchSchema) })),
 );
+
+/** 8: stable owner-controlled names. Agents report separate activity and cannot rename sessions. */
+export const Sessions = evolve(SessionsV7, (e) => e.removeMethod("renameSelf"));
 
 const Location = obj({ id: str(), cwd: str({ minLength: 1 }), env: union([str(), nul()]) });
 

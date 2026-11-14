@@ -29,7 +29,7 @@ P2_FAKE=1 npm start          # http://127.0.0.1:8788, data in ~/.pi/p2
 | --- | --- | --- |
 | `P2_DATA_DIR` | `~/.pi/p2` | data directory: `server/` and `sessions/<id>/` (see **Host stores and files**), `settings.json`, `models.json`, `envs.json`, `projects.json`, `mcp.json`, `mcp-auth.json`, `auth.json`, `radius.json`, `forwards.json` |
 | `PORT` | `8788` | listen port (loopback only), so p2 never collides with pi-mobile on 8787 |
-| `P2_FAKE` | unset | `1`: the faux provider (`faux/faux-1`, echoes the prompt; `slow …` streams long; `rename-session <title>` calls the tool; `subagent`, `subagent-bad`, `subagent-answer`, `subagent-configure`, `subagent-send`, `subagent-archive`, `subagent-status` exercise subagents, `subagent <json>` calls the tool with those arguments, as do `team <json>`, `history_search|read|handoff <json>`, `location_envs|dirs|move <json>`, `tool_search <json>`, `terminal <json>` and `mcp__<server>__<tool> <json>`; `codemode` runs a script calling bash and read, `codemode-restart` one whose slow middle call a restart interrupts, `codemode <script>` runs that script; `artifact` runs a script writing the html artifact `demo` and showing it; `view_<name> <json>` and `artifact_<name> <json>` call those tools directly (refused: they are code mode only); `steps` makes a turn of thinking, calls and words, `inline-steps` one with an inline artifact between two calls; `json <text>` answers exactly `<text>`; a one-shot agent whose task is not `json …`/`slow…` answers a small value matching its schema) |
+| `P2_FAKE` | unset | `1`: the faux provider (`faux/faux-1`, echoes the prompt; `slow …` streams long; `set-activity <text>` calls the tool; `subagent`, `subagent-bad`, `subagent-answer`, `subagent-configure`, `subagent-send`, `subagent-archive`, `subagent-status` exercise subagents, `subagent <json>` calls the tool with those arguments, as do `team <json>`, `history_search|read|handoff <json>`, `location_envs|dirs|move <json>`, `tool_search <json>`, `terminal <json>` and `mcp__<server>__<tool> <json>`; `codemode` runs a script calling bash and read, `codemode-restart` one whose slow middle call a restart interrupts, `codemode <script>` runs that script; `artifact` runs a script writing the html artifact `demo` and showing it; `view_<name> <json>` and `artifact_<name> <json>` call those tools directly (refused: they are code mode only); `steps` makes a turn of thinking, calls and words, `inline-steps` one with an inline artifact between two calls; `json <text>` answers exactly `<text>`; a one-shot agent whose task is not `json …`/`slow…` answers a small value matching its schema) |
 | `P2_IDLE_MS` | `300000` | idle time before a session worker stops |
 | `P2_PROVIDER`, `P2_MODEL` | unset | default model for new sessions after settings.json's `defaultModel` (both or neither; Pi Mobile's `PI_MOBILE_PROVIDER`/`PI_MOBILE_MODEL` work too) |
 | `P2_RADIUS` | unset | `0`: disable the outbound Radius brain connection even when signed in |
@@ -953,6 +953,14 @@ call, hold, method, relay and activation; nothing is measured or walked for it. 
     segment boundaries after a non-empty home, `~` matches everything with no subpath) and the target has it, else the
     move goes to the target's root (with a notice when the subfolder is missing there). Then `/cd`'s flow (its
     confirmation, `Sessions.relocate`). Tests: `projects.test.ts`, `tui-projects.test.ts`.
+- **Stable names and activity** (`plugins/sessions`): the owner controls the portable session title (web Rename,
+  TUI `/name`); first-message naming is unchanged. Agents cannot rename sessions. Main-only `set_activity({ text })`
+  writes a separate, whitespace-normalized phrase (160 characters maximum); `text: ""` explicitly clears it. It
+  survives idle workers and server restarts. Session-owned Durable content reports revisions through a
+  generation-fenced, persisted owner-only server projection; the shared Session schema is unchanged. The web name
+  discloses activity on hover, focus or tap, without a permanent second line; Open session navigates. Existing
+  working/unread marks are unchanged. Activity is not secret: normal tool/conversation history may expose its text
+  to shared participants. Tests: `session-activity.test.ts`, `ui-session-activity.test.ts`.
 - **Web sidebar** (`plugins/sessions/sidebar/`; README, Projects): the sessions plugin owns it, because the Session
   sheet's optimistic edits must show in the rows (docs/optimistic-ui.md). Three layers:
   - **Facts** (unchanged): the catalog's rows, `SessionStatus`, `SessionReads`, `Subagents`, `Sessions.operations`,
@@ -1627,7 +1635,7 @@ call, hold, method, relay and activation; nothing is measured or walked for it. 
   work running; direct child prompts do not report to the parent. **Tools** (`resolveChoice`/`resolveTools` in
   `contract.worker.ts`, validated before any commit, shared with one-shot agents): an agent gives from its own tools
   (`api.agent()`: offered, deferred and script-callable), never more. It may give every tool its model calls except
-  `scope: "main"` ones (`subagent`, `rename_session`, `conversations`, `ports`, `sidebar_rollups`) and
+  `scope: "main"` ones (`subagent`, `set_activity`, `conversations`, `ports`, `sidebar_rollups`) and
   `scope: "subagent"` ones (`team`, which every subagent gets, offered from the start); `tools` names them in order,
   the default is all of them (code mode only while the main agent has it; naming a tool it lacks is refused with the
   list it may give). Deferred tools stay deferred unless named (then offered from the start). Durable enables exactly
@@ -1647,7 +1655,7 @@ call, hold, method, relay and activation; nothing is measured or walked for it. 
   opening a window at its own location.
 - **Tool requirements** (`src/runtime/tool-access.ts`): a plugin declares them on its tool (`P2Tool`, `defineP2Tool`):
   `scope` (`"any"` default; `"main"`: only top-level conversations, for tools acting on the session as a whole:
-  `subagent`, `rename_session`, `conversations`, `ports`, `sidebar_rollups`; `"subagent"`: given to subagents only,
+  `subagent`, `set_activity`, `conversations`, `ports`, `sidebar_rollups`; `"subagent"`: given to subagents only,
   `team`) and `locked` (in a locked session: `pass` default, `never`, or a capability the owner picked: `ports`,
   `conversations`). The worker's Durable registry wraps every tool with requirements (`guardTool`, in
   `durableRegistry`), so no tool checks them itself. There is no per-turn authority (removed: the owner decided, as for

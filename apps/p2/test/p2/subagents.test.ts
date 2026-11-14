@@ -388,9 +388,9 @@ describe("subagents with code mode (fake provider)", () => {
 			action: "spawn",
 			name: "bad",
 			message: "x",
-			tools: ["subagent", "rename_session"],
+			tools: ["subagent", "set_activity"],
 		});
-		assert.match(text(main), /^Unknown tools: subagent, rename_session\. /);
+		assert.match(text(main), /^Unknown tools: subagent, set_activity\. /);
 		const chosen = await subagent({ action: "spawn", name: "chosen", message: "x", tools: ["bash", "codemode"] });
 		assert.deepEqual((chosen.details as { tools?: string[] }).tools, ["bash", "codemode"]);
 		await reported("chosen");
@@ -412,7 +412,7 @@ describe("subagents with code mode (fake provider)", () => {
 		const given = (spawned.details as { tools?: string[] }).tools ?? [];
 		for (const each of ["read", "bash", "codemode", "history_search", "location_move"])
 			assert.ok(given.includes(each), each);
-		for (const each of ["subagent", "rename_session", "team", "agent"]) assert.ok(!given.includes(each), each);
+		for (const each of ["subagent", "set_activity", "team", "agent"]) assert.ok(!given.includes(each), each);
 		const listed = await until(children.children, (value) =>
 			Boolean(value?.[session]?.some((each) => each.name === "coder")),
 		);

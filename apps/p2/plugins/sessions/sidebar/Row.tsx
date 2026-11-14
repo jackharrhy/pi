@@ -325,6 +325,7 @@ export function SessionItem({
 				}}
 				marker={marker}
 				label={title}
+				activity={session.activity}
 				target={target}
 				after={
 					nested && (

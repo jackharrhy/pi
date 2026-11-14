@@ -85,16 +85,16 @@ describe("tools given to agents", () => {
 		tool("mcp__files__echo", { callers: ["tools"], deferred: true }),
 		tool("powershell", { deferred: true }),
 		tool("subagent", { scope: "main" }),
-		tool("rename_session", { scope: "main" }),
+		tool("set_activity", { scope: "main" }),
 		tool("team", { deferred: true, scope: "subagent" }),
 	];
 	const access = new Map(registered.map((each) => [each.name, each]));
 	const pick = (...names: string[]) => registered.filter((each) => names.includes(each.name));
 	// The main agent: its model is offered these, `powershell` and `team` are deferred, scripts call the rest.
 	const caller = {
-		tools: pick("read", "bash", "codemode", "subagent", "rename_session"),
+		tools: pick("read", "bash", "codemode", "subagent", "set_activity"),
 		deferred: pick("powershell", "team"),
-		callable: pick("read", "bash", "agent", "mcp__files__echo", "subagent", "rename_session", "powershell", "team"),
+		callable: pick("read", "bash", "agent", "mcp__files__echo", "subagent", "set_activity", "powershell", "team"),
 	};
 	const names = (tools: readonly ToolRegistration[]) => tools.map((each) => each.name);
 
@@ -125,7 +125,7 @@ describe("tools given to agents", () => {
 	});
 
 	it("refuses session-level, subagent-only, script-only and unknown tools", () => {
-		for (const name of ["subagent", "rename_session", "team", "agent", "bogus"]) {
+		for (const name of ["subagent", "set_activity", "team", "agent", "bogus"]) {
 			const refused = resolveTools(caller, access, ["read", name], [], "subagent");
 			assert.equal(typeof refused, "string", name);
 			assert.match(

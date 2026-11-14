@@ -2,6 +2,7 @@
 // other plugins' web facets can show a row of their own through the sessions plugin's contract (`contract.web.tsx`).
 import { type CommandTargetRow, inPage, NavDisclosureIcon, SideNavigation } from "@p2/app/v1/web";
 import type { ReactNode } from "react";
+import { ActivityLink } from "./ActivityLink.tsx";
 
 /**
  * One row: a marker (a session's working mark, a group's icon; its column is kept when empty, so labels line up; absent:
@@ -28,6 +29,7 @@ export function NavRow({
 	controls,
 	target,
 	guides,
+	activity,
 }: {
 	selected?: boolean;
 	className?: string;
@@ -37,6 +39,7 @@ export function NavRow({
 	/** The address the label links to; absent: the label is an action (restore, switch a branch, show or hide). */
 	href?: string;
 	title?: string;
+	activity?: string;
 	/** Whether what the row shows or hides is shown; absent: the row does not show or hide anything. */
 	expanded?: boolean;
 	/** The element the row shows or hides. */
@@ -69,6 +72,17 @@ export function NavRow({
 					<span className="nav-label">{label}</span>
 					{expanded !== undefined && <NavDisclosureIcon className="nav-chevron" size={16} aria-hidden="true" />}
 				</button>
+			) : activity ? (
+				<ActivityLink
+					className={link}
+					href={href}
+					title={title}
+					active={selected}
+					activity={activity}
+					onActivate={onActivate}
+				>
+					{label}
+				</ActivityLink>
 			) : (
 				<SideNavigation.Link
 					className={link}
@@ -87,3 +101,4 @@ export function NavRow({
 		</div>
 	);
 }
+

@@ -38,6 +38,7 @@ import { Server, serverOf, WorkerInitValues } from "@p2/app/v1/server";
 import { EnvManagers, EnvService } from "../envs/contract.ts";
 import { ModelConfig, ModelResources } from "../models/contract.ts";
 import { ChildStore } from "../subagents/contract.ts";
+import { serveActivity } from "./activity-server.ts";
 import {
 	automaticTitle,
 	BY_ACTIVITY,
@@ -135,6 +136,7 @@ const SESSIONS_ACCEPTS: AcceptsTable<typeof Sessions> = {
 	3: {
 		state: stateAs(sessionV3),
 		methods: {
+			renameSelf: "refuse",
 			create: { ...SAME_ARGS, result: sessionV3 },
 			clone: { ...SAME_ARGS, result: sessionV3 },
 			fork: { ...SAME_ARGS, result: sessionV3 },
@@ -143,6 +145,7 @@ const SESSIONS_ACCEPTS: AcceptsTable<typeof Sessions> = {
 	4: {
 		state: stateAs(sessionV4),
 		methods: {
+			renameSelf: "refuse",
 			create: { ...SAME_ARGS, result: sessionV4 },
 			clone: { ...SAME_ARGS, result: sessionV4 },
 			fork: { ...SAME_ARGS, result: sessionV4 },
@@ -152,6 +155,7 @@ const SESSIONS_ACCEPTS: AcceptsTable<typeof Sessions> = {
 	5: {
 		state: stateAs(sessionV5),
 		methods: {
+			renameSelf: "refuse",
 			create: { ...SAME_ARGS, result: sessionV5 },
 			clone: { ...SAME_ARGS, result: sessionV5 },
 			fork: { ...SAME_ARGS, result: sessionV5 },
@@ -161,12 +165,14 @@ const SESSIONS_ACCEPTS: AcceptsTable<typeof Sessions> = {
 	6: {
 		state: stateAs(sessionV5),
 		methods: {
+			renameSelf: "refuse",
 			create: { result: sessionV5 },
 			clone: { result: sessionV5 },
 			fork: { result: sessionV5 },
 			treeSelf: SAME_ARGS,
 		},
 	},
+	7: { methods: { renameSelf: "refuse" } },
 };
 
 const cleanTitle = (title: string): string => title.replace(/\s+/g, " ").trim();
@@ -285,6 +291,7 @@ const ROW_WAIT_MS = 10_000;
 
 export default defineFacet((host) => {
 	serveLocks(host);
+	serveActivity(host);
 	serveSidebarSettings(host);
 	serveKeyed(host, SessionArchived);
 	serveKeyed(host, SessionCopied);
@@ -771,11 +778,6 @@ export default defineFacet((host) => {
 					variant: "worker",
 					members: {
 						session: sessionView,
-						renameSelf: async ({ title }, ctx) => {
-							const previous = (await catalog.get({ id }, ctx)).title;
-							await catalog.update({ id, title: cleanTitle(title) }, ctx);
-							return { previous };
-						},
 						// Either field alone updates the entry; the other keeps its value (Pi Mobile's configure).
 						configureSelf: async ({ model, thinkingLevel }, ctx) => {
 							await catalog.update(

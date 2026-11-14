@@ -49,11 +49,13 @@ import { Search, SessionReads } from "../search/contract.ts";
 import { SessionStatus } from "../status/contract.ts";
 import { type Child, Subagents } from "../subagents/contract.ts";
 import { SessionTree } from "../tree/contract.ts";
+import { SessionActivity } from "./activity-contract.ts";
 import { BRANCH_SHEET, BranchSheet, branchOf } from "./BranchSheet.tsx";
 import { SESSION_COMMANDS, SESSION_PAGES, SESSION_SEARCH } from "./commands.tsx";
 import { type Operation, type Session, Sessions, SidebarSettings, type SidebarWindow } from "./contract.ts";
 import { type DrawerRows, DrawerRowsContext } from "./contract.web.tsx";
 import { SessionSheet } from "./SessionSheet.tsx";
+import "./activity.css";
 import { customKey, customRollup } from "./sidebar/custom.ts";
 import { ListPage } from "./sidebar/ListPage.tsx";
 import {
@@ -170,6 +172,7 @@ function useSidebarData() {
 	const agents = keptIn(useObject(Subagents, {}), "reader");
 	const { fail, focusWhenOpen } = useComposerState();
 	const [list, edit] = useOptimisticCall(useReadable(keptIn(service, "owner", "guest")?.sessions), applyRow, fail);
+	const activities = useReadable(useObject(SessionActivity, owner ? {} : undefined, { variant: "owner" })?.activities);
 	const statuses = useReadable(status?.statuses);
 	const children = useReadable(agents?.children);
 	// Unread answers are the owner's (any device); guests see none and mark nothing.
@@ -194,6 +197,7 @@ function useSidebarData() {
 				const busy = statuses?.[session.id]?.busy ?? [];
 				return {
 					...session,
+					activity: owner ? activities?.[session.id] : undefined,
 					env: session.env ?? null,
 					worker: {
 						busy,
@@ -205,7 +209,7 @@ function useSidebarData() {
 					operation: operationOf(operations, session.id, dismiss),
 				};
 			}),
-		[list, statuses, children, answers, reads, operations, dismiss],
+		[list, statuses, children, answers, reads, operations, dismiss, owner, activities],
 	);
 	// The projects rollup reads projects.json and the sessions' projects (`Projects`, from the projects plugin).
 	const projectsHeld = useObject(Projects, owner ? {} : undefined);

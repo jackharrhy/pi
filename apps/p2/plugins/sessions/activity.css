@@ -1,0 +1,31 @@
+.session-activity-anchor {
+	display: contents;
+}
+.session-activity-popover {
+	position: fixed;
+	inset: auto;
+	margin: 0;
+	width: min(280px, calc(100vw - var(--s4)));
+	padding: var(--s3);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--bg);
+	color: var(--text);
+	font-size: var(--fs-sm);
+	overflow-wrap: anywhere;
+}
+.session-activity-caption {
+	color: var(--muted);
+	font-size: var(--fs-xs);
+}
+.session-activity-popover p {
+	margin: var(--s2) 0;
+}
+.session-activity-popover a,
+.session-activity-popover button {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--row);
+	padding-inline: var(--s2);
+	color: var(--text);
+}
