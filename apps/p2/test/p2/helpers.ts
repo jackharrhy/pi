@@ -420,6 +420,8 @@ export async function testHost(options: {
 	readonly kind?: "server" | "worker";
 	readonly principal?: P2Principal;
 	readonly facets: readonly Facet[];
+	/** A real host store for persisted-state lifecycle tests. */
+	readonly store?: Parameters<typeof createHost>[0]["store"];
 	readonly stubs?: readonly Stub[];
 	/** Runs before `load`: routes (`host.route`) are declared there. */
 	readonly beforeLoad?: (host: Host) => void;
@@ -430,6 +432,7 @@ export async function testHost(options: {
 	const clients: Host[] = [];
 	const worker = options.kind === "worker";
 	const host = createHost({
+		...(options.store === undefined ? {} : { store: options.store }),
 		address: options.address ?? Server(),
 		principal: worker ? HOST : SERVER,
 		onError: reportTo((error) => errors.push(error)),
